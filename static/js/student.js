@@ -118,6 +118,12 @@ function renderBookingRow(booking) {
   statusCell.textContent = booking.status;
   row.appendChild(statusCell);
 
+  const reportCell = document.createElement("td");
+  if (booking.report) {
+    reportCell.textContent = `${booking.report.attended ? "Attended" : "No-show"} — ${booking.report.notes}`;
+  }
+  row.appendChild(reportCell);
+
   const actionsCell = document.createElement("td");
   if (booking.status === "pending" || booking.status === "confirmed") {
     const cancelButton = document.createElement("button");

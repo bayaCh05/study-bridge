@@ -127,6 +127,12 @@ function renderBookingRow(booking) {
   statusCell.textContent = booking.status;
   row.appendChild(statusCell);
 
+  const reportCell = document.createElement("td");
+  if (booking.report) {
+    reportCell.textContent = `${booking.report.attended ? "Attended" : "No-show"} — ${booking.report.notes}`;
+  }
+  row.appendChild(reportCell);
+
   const actionsCell = document.createElement("td");
   if (booking.status === "pending") {
     actionsCell.appendChild(makeBookingActionButton("Accept", () => respondToBooking(booking.id, "accept")));
@@ -135,6 +141,9 @@ function renderBookingRow(booking) {
     actionsCell.appendChild(
       makeBookingActionButton("Cancel", () => respondToBooking(booking.id, "cancel"), "Cancel this booking?")
     );
+    if (new Date(booking.end_at) <= new Date()) {
+      actionsCell.appendChild(makeBookingActionButton("Complete", () => completeBooking(booking.id)));
+    }
   }
   row.appendChild(actionsCell);
 
@@ -157,6 +166,24 @@ async function respondToBooking(bookingId, action) {
   if (!response.ok) {
     const data = await response.json();
     alert(data.error || "Could not update this booking");
+    return;
+  }
+  await Promise.all([loadSlots(), loadBookings()]);
+}
+
+async function completeBooking(bookingId) {
+  const attended = confirm("Did the student attend? OK = yes, Cancel = no");
+  const notes = prompt("Session notes:");
+  if (notes === null || notes.trim() === "") return;
+
+  const response = await fetch(`/api/bookings/${bookingId}/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ attended, notes: notes.trim() }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    alert(data.error || "Could not complete this booking");
     return;
   }
   await Promise.all([loadSlots(), loadBookings()]);

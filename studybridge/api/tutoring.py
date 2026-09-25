@@ -1,4 +1,4 @@
-"""Tutor availability, and student/tutor bookings. Session reports are added in Step 6."""
+"""Tutor availability, student/tutor bookings, and session reports."""
 
 import sqlite3
 from datetime import datetime
@@ -129,11 +129,13 @@ BOOKING_SELECT = """
         bookings.id, bookings.subject, bookings.status, bookings.created_at, bookings.updated_at,
         bookings.student_id, students.full_name AS student_name,
         availability.id AS availability_id, availability.start_at, availability.end_at,
-        availability.tutor_id, tutors.full_name AS tutor_name
+        availability.tutor_id, tutors.full_name AS tutor_name,
+        session_reports.attended AS report_attended, session_reports.notes AS report_notes
     FROM bookings
     JOIN availability ON availability.id = bookings.availability_id
     JOIN users AS students ON students.id = bookings.student_id
     JOIN users AS tutors ON tutors.id = availability.tutor_id
+    LEFT JOIN session_reports ON session_reports.booking_id = bookings.id
 """
 
 
@@ -155,6 +157,13 @@ def _serialize_booking(row):
         "availability_id": row["availability_id"],
         "start_at": row["start_at"],
         "end_at": row["end_at"],
+        # Visible to the student too, by design: the report is feedback on
+        # their session, not an internal-only record.
+        "report": (
+            {"attended": bool(row["report_attended"]), "notes": row["report_notes"]}
+            if row["report_attended"] is not None
+            else None
+        ),
     }
 
 
@@ -358,6 +367,64 @@ def handle_cancel_booking(handler, params):
         conn.close()
 
 
+def handle_complete_booking(handler, params):
+    conn = db.get_connection()
+    try:
+        actor = auth.require_roles(handler, conn, "tutor")
+        if actor is None:
+            return
+
+        booking_id = _parse_booking_id(handler, params)
+        if booking_id is None:
+            return
+
+        row = _fetch_booking(conn, booking_id)
+        if row is None:
+            handler.send_json(404, {"error": "Booking not found"})
+            return
+        if row["tutor_id"] != actor["id"]:
+            handler.send_json(403, {"error": "You can only report on your own bookings"})
+            return
+        if row["status"] != "confirmed":
+            handler.send_json(400, {"error": f"Cannot complete a booking that is {row['status']}"})
+            return
+        if datetime.fromisoformat(row["end_at"]) > timeutil.now():
+            handler.send_json(400, {"error": "Cannot report a session that hasn't ended yet"})
+            return
+
+        body = handler.read_json()
+        attended = body.get("attended")
+        notes = (body.get("notes") or "").strip()
+        if not isinstance(attended, bool):
+            handler.send_json(400, {"error": "attended must be true or false"})
+            return
+        if not notes:
+            handler.send_json(400, {"error": "notes is required"})
+            return
+
+        now_iso = timeutil.now_iso()
+        try:
+            with db.transaction(conn):
+                conn.execute(
+                    "UPDATE bookings SET status = 'completed', updated_at = ? WHERE id = ?",
+                    (now_iso, booking_id),
+                )
+                conn.execute(
+                    "INSERT INTO session_reports (booking_id, attended, notes, created_at) VALUES (?, ?, ?, ?)",
+                    (booking_id, 1 if attended else 0, notes, now_iso),
+                )
+        except sqlite3.IntegrityError:
+            # session_reports.booking_id is UNIQUE: this is a defense-in-depth
+            # backstop (e.g. a double-submitted request) since the status
+            # check above already blocks reporting on the same booking twice.
+            handler.send_json(409, {"error": "A report already exists for this booking"})
+            return
+
+        handler.send_json(200, _serialize_booking(_fetch_booking(conn, booking_id)))
+    finally:
+        conn.close()
+
+
 router.add("GET", "/api/availability", handle_list_slots)
 router.add("POST", "/api/availability", handle_create_slot)
 router.add("DELETE", "/api/availability/{id}", handle_delete_slot)
@@ -368,3 +435,4 @@ router.add("POST", "/api/bookings", handle_create_booking)
 router.add("POST", "/api/bookings/{id}/accept", handle_accept_booking)
 router.add("POST", "/api/bookings/{id}/decline", handle_decline_booking)
 router.add("POST", "/api/bookings/{id}/cancel", handle_cancel_booking)
+router.add("POST", "/api/bookings/{id}/complete", handle_complete_booking)
