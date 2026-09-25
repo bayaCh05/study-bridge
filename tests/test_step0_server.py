@@ -6,18 +6,33 @@ urllib.request calls, just like a browser would.
 """
 
 import json
+import tempfile
 import threading
 import unittest
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
+from unittest.mock import patch
 
+from studybridge import config, db
 from studybridge.server import StudyBridgeHandler
 
 
 class TestStep0Server(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # /health now touches the database (Step 1), so give it a throwaway
+        # one instead of touching the project's real data/studybridge.db.
+        cls.tmp_dir = tempfile.TemporaryDirectory()
+        cls.db_patches = [
+            patch.object(config, "DATA_DIR", Path(cls.tmp_dir.name)),
+            patch.object(config, "DB_PATH", Path(cls.tmp_dir.name) / "test.db"),
+        ]
+        for p in cls.db_patches:
+            p.start()
+        db.init_db()
+
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), StudyBridgeHandler)
         cls.base_url = f"http://127.0.0.1:{cls.server.server_port}"
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
@@ -28,6 +43,9 @@ class TestStep0Server(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join()
+        for p in cls.db_patches:
+            p.stop()
+        cls.tmp_dir.cleanup()
 
     def test_index_page_returns_html(self):
         with urllib.request.urlopen(f"{self.base_url}/") as response:
@@ -46,6 +64,7 @@ class TestStep0Server(unittest.TestCase):
             self.assertEqual(response.status, 200)
             data = json.loads(response.read())
             self.assertEqual(data["status"], "ok")
+            self.assertEqual(data["database"], "ok")
 
     def test_unknown_path_is_404(self):
         with self.assertRaises(urllib.error.HTTPError) as ctx:

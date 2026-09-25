@@ -9,10 +9,11 @@ HTTP request line and headers off the socket and call one of our methods
 import json
 import logging
 import mimetypes
+import sqlite3
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from studybridge import config
+from studybridge import config, db
 from studybridge.router import MethodNotAllowed, RouteNotFound, router
 
 logger = logging.getLogger("studybridge")
@@ -104,7 +105,7 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
             elif path.startswith("/static/"):
                 self._serve_static(path[len("/static/") :])
             elif path == "/health":
-                self.send_json(200, {"status": "ok"})
+                self._handle_health()
             else:
                 self._dispatch_api(path)
         except Exception:
@@ -114,6 +115,18 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
             duration_ms = (time.monotonic() - start) * 1000
             status = getattr(self, "_status_code", "-")
             logger.info("%s %s %s %.1fms", self.command, path, status, duration_ms)
+
+    def _handle_health(self):
+        try:
+            conn = db.get_connection()
+            try:
+                conn.execute("SELECT 1")
+            finally:
+                conn.close()
+            self.send_json(200, {"status": "ok", "database": "ok"})
+        except sqlite3.Error:
+            logger.exception("Database health check failed")
+            self.send_json(503, {"status": "ok", "database": "down"})
 
     def _dispatch_api(self, path):
         try:
@@ -129,6 +142,7 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
 
 def run_server():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    db.init_db()
     server = ThreadingHTTPServer((config.HOST, config.PORT), StudyBridgeHandler)
     logger.info("Study Bridge listening on %s:%s", config.HOST, config.PORT)
     try:
