@@ -4,6 +4,7 @@ const tbody = document.getElementById("slots-tbody");
 const form = document.getElementById("slot-form");
 const formError = document.getElementById("form-error");
 const saveButton = document.getElementById("save-button");
+const bookingsTbody = document.getElementById("bookings-tbody");
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString();
@@ -21,7 +22,7 @@ async function init() {
     return;
   }
   app.hidden = false;
-  await loadSlots();
+  await Promise.all([loadSlots(), loadBookings()]);
 }
 
 async function loadSlots() {
@@ -97,6 +98,69 @@ form.addEventListener("submit", async (event) => {
     saveButton.disabled = false;
   }
 });
+
+async function loadBookings() {
+  const response = await fetch("/api/bookings");
+  const data = await response.json();
+  bookingsTbody.textContent = "";
+  for (const booking of data.bookings) {
+    bookingsTbody.appendChild(renderBookingRow(booking));
+  }
+}
+
+function renderBookingRow(booking) {
+  const row = document.createElement("tr");
+
+  const studentCell = document.createElement("td");
+  studentCell.textContent = booking.student_name;
+  row.appendChild(studentCell);
+
+  const subjectCell = document.createElement("td");
+  subjectCell.textContent = booking.subject;
+  row.appendChild(subjectCell);
+
+  const whenCell = document.createElement("td");
+  whenCell.textContent = `${formatDateTime(booking.start_at)} - ${formatDateTime(booking.end_at)}`;
+  row.appendChild(whenCell);
+
+  const statusCell = document.createElement("td");
+  statusCell.textContent = booking.status;
+  row.appendChild(statusCell);
+
+  const actionsCell = document.createElement("td");
+  if (booking.status === "pending") {
+    actionsCell.appendChild(makeBookingActionButton("Accept", () => respondToBooking(booking.id, "accept")));
+    actionsCell.appendChild(makeBookingActionButton("Decline", () => respondToBooking(booking.id, "decline")));
+  } else if (booking.status === "confirmed") {
+    actionsCell.appendChild(
+      makeBookingActionButton("Cancel", () => respondToBooking(booking.id, "cancel"), "Cancel this booking?")
+    );
+  }
+  row.appendChild(actionsCell);
+
+  return row;
+}
+
+function makeBookingActionButton(label, onClick, confirmMessage) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.addEventListener("click", () => {
+    if (confirmMessage && !confirm(confirmMessage)) return;
+    onClick();
+  });
+  return button;
+}
+
+async function respondToBooking(bookingId, action) {
+  const response = await fetch(`/api/bookings/${bookingId}/${action}`, { method: "POST" });
+  if (!response.ok) {
+    const data = await response.json();
+    alert(data.error || "Could not update this booking");
+    return;
+  }
+  await Promise.all([loadSlots(), loadBookings()]);
+}
 
 document.getElementById("logout-button").addEventListener("click", async () => {
   await fetch("/api/logout", { method: "POST" });

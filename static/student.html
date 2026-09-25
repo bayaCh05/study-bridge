@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Bridge &mdash; Student</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Student dashboard</h1>
+    <button id="logout-button" type="button">Log out</button>
+  </header>
+
+  <p id="access-denied" hidden>Access denied.</p>
+
+  <main id="app" hidden>
+    <section>
+      <h2>Book a tutor</h2>
+      <div id="tutors-list"></div>
+    </section>
+
+    <section>
+      <h2>My bookings</h2>
+      <table id="bookings-table">
+        <thead>
+          <tr>
+            <th>Tutor</th>
+            <th>Subject</th>
+            <th>When</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="bookings-tbody"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/js/student.js"></script>
+</body>
+</html>

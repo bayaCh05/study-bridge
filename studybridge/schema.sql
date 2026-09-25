@@ -30,12 +30,24 @@ CREATE TABLE IF NOT EXISTS availability (
 CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    availability_id INTEGER NOT NULL UNIQUE REFERENCES availability(id) ON DELETE CASCADE,
+    availability_id INTEGER NOT NULL REFERENCES availability(id) ON DELETE CASCADE,
     subject TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'declined', 'cancelled', 'completed')) DEFAULT 'pending',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- A slot can rack up a history of declined/cancelled bookings and still be
+-- rebooked, but only one PENDING or CONFIRMED booking may exist for it at a
+-- time. A plain UNIQUE on availability_id would block rebooking after a
+-- decline; this partial index only blocks a second *active* one. Two
+-- simultaneous inserts racing for the same slot: SQLite lets the first
+-- commit and rejects the second right here with an IntegrityError, which
+-- the API turns into 409 "This slot was just taken" — no double booking is
+-- possible even under real concurrency.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_booking_per_slot
+ON bookings (availability_id)
+WHERE status IN ('pending', 'confirmed');
 
 CREATE TABLE IF NOT EXISTS session_reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
