@@ -28,3 +28,6 @@ SESSION_LIFETIME_HOURS = int(os.environ.get("SESSION_LIFETIME_HOURS", "8"))
 
 # Used from Step 9 onward, to reject oversized request bodies (413).
 MAX_BODY_SIZE = int(os.environ.get("MAX_BODY_SIZE", str(6 * 1024 * 1024)))  # 6 MB
+
+# Recommendation letters (Step 8): max size of the decoded PDF file itself.
+MAX_LETTER_SIZE = 5 * 1024 * 1024  # 5 MB

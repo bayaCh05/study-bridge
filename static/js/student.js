@@ -7,6 +7,7 @@ const officeHoursForm = document.getElementById("office-hours-form");
 const officeHoursError = document.getElementById("office-hours-error");
 const officeHoursSaveButton = document.getElementById("office-hours-save-button");
 const officeHoursTbody = document.getElementById("office-hours-tbody");
+const lettersTbody = document.getElementById("letters-tbody");
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString();
@@ -24,7 +25,7 @@ async function init() {
     return;
   }
   app.hidden = false;
-  await Promise.all([loadTutors(), loadBookings(), loadAdvisors(), loadOfficeHourRequests()]);
+  await Promise.all([loadTutors(), loadBookings(), loadAdvisors(), loadOfficeHourRequests(), loadLetters()]);
 }
 
 async function loadTutors() {
@@ -232,6 +233,40 @@ officeHoursForm.addEventListener("submit", async (event) => {
     officeHoursSaveButton.disabled = false;
   }
 });
+
+async function loadLetters() {
+  const response = await fetch("/api/letters");
+  const data = await response.json();
+  lettersTbody.textContent = "";
+  for (const letter of data.letters) {
+    lettersTbody.appendChild(renderLetterRow(letter));
+  }
+}
+
+function renderLetterRow(letter) {
+  const row = document.createElement("tr");
+
+  const titleCell = document.createElement("td");
+  titleCell.textContent = letter.title;
+  row.appendChild(titleCell);
+
+  const fromCell = document.createElement("td");
+  fromCell.textContent = letter.advisor_name;
+  row.appendChild(fromCell);
+
+  const uploadedCell = document.createElement("td");
+  uploadedCell.textContent = formatDateTime(letter.uploaded_at);
+  row.appendChild(uploadedCell);
+
+  const downloadCell = document.createElement("td");
+  const downloadLink = document.createElement("a");
+  downloadLink.href = `/api/letters/${letter.id}/download`;
+  downloadLink.textContent = "Download";
+  downloadCell.appendChild(downloadLink);
+  row.appendChild(downloadCell);
+
+  return row;
+}
 
 document.getElementById("logout-button").addEventListener("click", async () => {
   await fetch("/api/logout", { method: "POST" });
