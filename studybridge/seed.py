@@ -4,9 +4,7 @@ Run: python3 -m studybridge.seed
 Safe to run more than once: existing emails are skipped.
 """
 
-from datetime import datetime, timezone
-
-from studybridge import db
+from studybridge import db, timeutil
 from studybridge.auth import hash_password
 
 DEMO_USERS = [
@@ -22,7 +20,7 @@ def seed():
     db.init_db()
     conn = db.get_connection()
     try:
-        now = datetime.now(timezone.utc).isoformat()
+        now = timeutil.now_iso()
         for full_name, email, password, role in DEMO_USERS:
             existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             if existing:

@@ -16,7 +16,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from studybridge import config, db
 from studybridge.router import MethodNotAllowed, RouteNotFound, router
 
+# Importing this registers every /api/... route on `router` as a side
+# effect (each api/*.py module calls router.add(...) at import time).
+from studybridge import api  # noqa: F401,E402
+
 logger = logging.getLogger("studybridge")
+
+# Static HTML pages served at a clean path instead of under /static/.
+# Role dashboards are added to this list as they're built in later steps.
+PAGE_ROUTES = {
+    "/login": "login.html",
+    "/student": "student.html",
+    "/tutor": "tutor.html",
+    "/advisor": "advisor.html",
+    "/management": "management.html",
+}
 
 
 class StudyBridgeHandler(BaseHTTPRequestHandler):
@@ -47,11 +61,13 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
         self._handle()
 
     # --- Response helpers, used by this module and by future API code
-    def send_json(self, status, data):
+    def send_json(self, status, data, headers=None):
         body = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in headers or []:
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -106,6 +122,8 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
                 self._serve_static(path[len("/static/") :])
             elif path == "/health":
                 self._handle_health()
+            elif path in PAGE_ROUTES:
+                self._serve_static(PAGE_ROUTES[path])
             else:
                 self._dispatch_api(path)
         except Exception:

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Bridge &mdash; Log in</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <h1>Study Bridge</h1>
+  <form id="login-form">
+    <label>
+      Email
+      <input type="email" id="email" required autocomplete="username" />
+    </label>
+    <label>
+      Password
+      <input type="password" id="password" required autocomplete="current-password" />
+    </label>
+    <button type="submit">Log in</button>
+    <p id="error" role="alert" hidden></p>
+  </form>
+  <script src="/static/js/login.js"></script>
+</body>
+</html>
