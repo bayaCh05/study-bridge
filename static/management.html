@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Bridge &mdash; Management</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Management</h1>
+    <button id="logout-button" type="button">Log out</button>
+  </header>
+
+  <p id="access-denied" hidden>Access denied.</p>
+
+  <main id="app" hidden>
+    <section>
+      <h2>Users</h2>
+      <form id="filter-form">
+        <label>
+          Role
+          <select id="filter-role">
+            <option value="">All</option>
+            <option value="student">Student</option>
+            <option value="tutor">Tutor</option>
+            <option value="advisor">Advisor</option>
+            <option value="management">Management</option>
+          </select>
+        </label>
+        <label>
+          Search
+          <input type="search" id="filter-search" placeholder="Name or email" />
+        </label>
+        <button type="submit">Filter</button>
+      </form>
+
+      <table id="users-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="form-title">Add a user</h2>
+      <form id="user-form">
+        <input type="hidden" id="user-id" />
+        <label>
+          Full name
+          <input type="text" id="full_name" required />
+        </label>
+        <label>
+          Email
+          <input type="email" id="email" required />
+        </label>
+        <label id="password-label">
+          Password
+          <input type="password" id="password" />
+        </label>
+        <label>
+          Role
+          <select id="role" required>
+            <option value="student">Student</option>
+            <option value="tutor">Tutor</option>
+            <option value="advisor">Advisor</option>
+            <option value="management">Management</option>
+          </select>
+        </label>
+        <button type="submit" id="save-button">Create</button>
+        <button type="button" id="cancel-edit" hidden>Cancel</button>
+        <p id="form-error" role="alert" hidden></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="/static/js/management.js"></script>
+</body>
+</html>
