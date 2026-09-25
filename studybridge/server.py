@@ -8,6 +8,7 @@ HTTP request line and headers off the socket and call one of our methods
 
 import json
 import logging
+import logging.handlers
 import mimetypes
 import sqlite3
 import time
@@ -22,6 +23,11 @@ from studybridge import api  # noqa: F401,E402
 
 logger = logging.getLogger("studybridge")
 
+
+class PayloadTooLarge(Exception):
+    """Raised by read_json() when Content-Length exceeds config.MAX_BODY_SIZE."""
+
+
 # Static HTML pages served at a clean path instead of under /static/.
 # Role dashboards are added to this list as they're built in later steps.
 PAGE_ROUTES = {
@@ -34,6 +40,12 @@ PAGE_ROUTES = {
 
 
 class StudyBridgeHandler(BaseHTTPRequestHandler):
+    # socketserver.StreamRequestHandler reads this in setup() and calls
+    # self.connection.settimeout(self.timeout) — a client that connects and
+    # then goes silent (or trickles bytes forever) gets disconnected instead
+    # of tying up one of the server's threads indefinitely.
+    timeout = config.REQUEST_TIMEOUT_SECONDS
+
     # BaseHTTPRequestHandler calls log_message() for every request by
     # default, which prints straight to stderr. We replace that with our
     # own line (method, path, status, duration) via the `logging` module,
@@ -76,8 +88,23 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         if length == 0:
             return {}
+        if length > config.MAX_BODY_SIZE:
+            # The client is still writing this body over the same socket we'd
+            # send a 413 on. If we respond without reading it, the client's
+            # write gets a broken pipe instead of ever seeing our response —
+            # so drain it first, then reject.
+            self._drain(length)
+            raise PayloadTooLarge()
         raw = self.rfile.read(length)
         return json.loads(raw.decode("utf-8"))
+
+    def _drain(self, length):
+        remaining = length
+        while remaining > 0:
+            chunk = self.rfile.read(min(65536, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
 
     def send_file(self, path):
         content_type, _ = mimetypes.guess_type(str(path))
@@ -126,6 +153,16 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
                 self._serve_static(PAGE_ROUTES[path])
             else:
                 self._dispatch_api(path)
+        except PayloadTooLarge:
+            self.send_json(413, {"error": "Request body is too large"})
+        except json.JSONDecodeError:
+            self.send_json(400, {"error": "Invalid JSON in request body"})
+        except sqlite3.OperationalError:
+            # e.g. the DB file was moved/renamed, or the disk is briefly
+            # locked by another writer for longer than busy_timeout — a
+            # real but transient outage, distinct from a bug in our code.
+            logger.exception("Database error while serving %s %s", self.command, path)
+            self.send_json(503, {"error": "Service temporarily unavailable, please try again"})
         except Exception:
             logger.exception("Unhandled error while serving %s %s", self.command, path)
             self.send_json(500, {"error": "Internal server error"})
@@ -158,8 +195,28 @@ class StudyBridgeHandler(BaseHTTPRequestHandler):
         handler(self, params)
 
 
+def _configure_logging():
+    config.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+
+    # Rotate at 1 MB, keep 3 old copies, so logs/ doesn't grow unbounded on
+    # a long-running VM deployment.
+    file_handler = logging.handlers.RotatingFileHandler(
+        config.LOG_DIR / "server.log", maxBytes=1_000_000, backupCount=3
+    )
+    file_handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+
 def run_server():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    _configure_logging()
     db.init_db()
     server = ThreadingHTTPServer((config.HOST, config.PORT), StudyBridgeHandler)
     logger.info("Study Bridge listening on %s:%s", config.HOST, config.PORT)

@@ -12,13 +12,18 @@ const passwordLabel = document.getElementById("password-label");
 const passwordInput = document.getElementById("password");
 
 async function init() {
-  const response = await fetch("/api/me");
-  if (response.status === 401) {
-    window.location.href = "/login";
+  let me;
+  try {
+    me = await apiFetch("/api/me");
+  } catch (err) {
+    if (err.status === 401) {
+      window.location.href = "/login";
+    } else {
+      accessDenied.hidden = false;
+    }
     return;
   }
-  const me = await response.json();
-  if (!response.ok || me.role !== "management") {
+  if (me.role !== "management") {
     accessDenied.hidden = false;
     return;
   }
@@ -37,8 +42,7 @@ function buildQuery() {
 }
 
 async function loadUsers() {
-  const response = await fetch(`/api/users${buildQuery()}`);
-  const data = await response.json();
+  const data = await apiFetch(`/api/users${buildQuery()}`);
   tbody.textContent = "";
   for (const user of data.users) {
     tbody.appendChild(renderRow(user));
@@ -129,31 +133,16 @@ form.addEventListener("submit", async (event) => {
   };
 
   try {
-    let response;
     if (state.editingId) {
-      response = await fetch(`/api/users/${state.editingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      await apiFetch(`/api/users/${state.editingId}`, { method: "PUT", body: JSON.stringify(payload) });
     } else {
       payload.password = passwordInput.value;
-      response = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-    const data = await response.json();
-    if (!response.ok) {
-      formError.textContent = data.error || "Could not save this user";
-      formError.hidden = false;
-      return;
+      await apiFetch("/api/users", { method: "POST", body: JSON.stringify(payload) });
     }
     resetForm();
     await loadUsers();
   } catch (err) {
-    formError.textContent = "Server unreachable — check your network or try again later";
+    formError.textContent = err.message;
     formError.hidden = false;
   } finally {
     saveButton.disabled = false;
@@ -162,28 +151,31 @@ form.addEventListener("submit", async (event) => {
 
 async function toggleActive(user) {
   const action = user.is_active ? "deactivate" : "reactivate";
-  const response = await fetch(`/api/users/${user.id}/${action}`, { method: "POST" });
-  const data = await response.json();
-  if (!response.ok) {
-    alert(data.error || "Could not update this user");
-    return;
+  try {
+    await apiFetch(`/api/users/${user.id}/${action}`, { method: "POST" });
+    await loadUsers();
+  } catch (err) {
+    alert(err.message);
   }
-  await loadUsers();
 }
 
 async function deleteUser(user) {
   if (!confirm(`Delete ${user.full_name}? This cannot be undone.`)) return;
-  const response = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
-  if (!response.ok) {
-    const data = await response.json();
-    alert(data.error || "Could not delete this user");
-    return;
+  try {
+    await apiFetch(`/api/users/${user.id}`, { method: "DELETE" });
+    await loadUsers();
+  } catch (err) {
+    alert(err.message);
   }
-  await loadUsers();
 }
 
 document.getElementById("logout-button").addEventListener("click", async () => {
-  await fetch("/api/logout", { method: "POST" });
+  try {
+    await apiFetch("/api/logout", { method: "POST" });
+  } catch (err) {
+    // Logging out best-effort even if the request failed — always send
+    // the user back to the login page.
+  }
   window.location.href = "/login";
 });
 

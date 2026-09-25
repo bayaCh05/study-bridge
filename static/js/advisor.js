@@ -12,13 +12,18 @@ function formatDateTime(iso) {
 }
 
 async function init() {
-  const response = await fetch("/api/me");
-  if (response.status === 401) {
-    window.location.href = "/login";
+  let me;
+  try {
+    me = await apiFetch("/api/me");
+  } catch (err) {
+    if (err.status === 401) {
+      window.location.href = "/login";
+    } else {
+      accessDenied.hidden = false;
+    }
     return;
   }
-  const me = await response.json();
-  if (!response.ok || me.role !== "advisor") {
+  if (me.role !== "advisor") {
     accessDenied.hidden = false;
     return;
   }
@@ -27,8 +32,7 @@ async function init() {
 }
 
 async function loadRequests() {
-  const response = await fetch("/api/office-hours");
-  const data = await response.json();
+  const data = await apiFetch("/api/office-hours");
   tbody.textContent = "";
   for (const request of data.requests) {
     tbody.appendChild(renderRow(request));
@@ -79,22 +83,16 @@ function renderRow(request) {
 
 async function respond(requestId, action) {
   const comment = prompt("Optional comment:") || "";
-  const response = await fetch(`/api/office-hours/${requestId}/${action}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ comment }),
-  });
-  if (!response.ok) {
-    const data = await response.json();
-    alert(data.error || "Could not update this request");
-    return;
+  try {
+    await apiFetch(`/api/office-hours/${requestId}/${action}`, { method: "POST", body: JSON.stringify({ comment }) });
+    await loadRequests();
+  } catch (err) {
+    alert(err.message);
   }
-  await loadRequests();
 }
 
 async function loadStudentsForLetters() {
-  const response = await fetch("/api/students");
-  const data = await response.json();
+  const data = await apiFetch("/api/students");
   letterStudentSelect.textContent = "";
   for (const student of data.students) {
     const option = document.createElement("option");
@@ -132,9 +130,8 @@ letterForm.addEventListener("submit", async (event) => {
     }
 
     const contentBase64 = await readFileAsBase64(file);
-    const response = await fetch("/api/letters", {
+    await apiFetch("/api/letters", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         student_id: letterStudentSelect.value,
         title: document.getElementById("letter-title").value,
@@ -142,16 +139,10 @@ letterForm.addEventListener("submit", async (event) => {
         content_base64: contentBase64,
       }),
     });
-    const data = await response.json();
-    if (!response.ok) {
-      letterError.textContent = data.error || "Could not upload this letter";
-      letterError.hidden = false;
-      return;
-    }
     letterForm.reset();
     await loadLetters();
   } catch (err) {
-    letterError.textContent = "Server unreachable — check your network or try again later";
+    letterError.textContent = err.message;
     letterError.hidden = false;
   } finally {
     letterSaveButton.disabled = false;
@@ -159,8 +150,7 @@ letterForm.addEventListener("submit", async (event) => {
 });
 
 async function loadLetters() {
-  const response = await fetch("/api/letters");
-  const data = await response.json();
+  const data = await apiFetch("/api/letters");
   lettersTbody.textContent = "";
   for (const letter of data.letters) {
     lettersTbody.appendChild(renderLetterRow(letter));
@@ -193,7 +183,11 @@ function renderLetterRow(letter) {
 }
 
 document.getElementById("logout-button").addEventListener("click", async () => {
-  await fetch("/api/logout", { method: "POST" });
+  try {
+    await apiFetch("/api/logout", { method: "POST" });
+  } catch (err) {
+    // Best-effort: send the user back to login regardless.
+  }
   window.location.href = "/login";
 });
 

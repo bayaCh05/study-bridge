@@ -11,13 +11,18 @@ function formatDateTime(iso) {
 }
 
 async function init() {
-  const response = await fetch("/api/me");
-  if (response.status === 401) {
-    window.location.href = "/login";
+  let me;
+  try {
+    me = await apiFetch("/api/me");
+  } catch (err) {
+    if (err.status === 401) {
+      window.location.href = "/login";
+    } else {
+      accessDenied.hidden = false;
+    }
     return;
   }
-  const me = await response.json();
-  if (!response.ok || me.role !== "tutor") {
+  if (me.role !== "tutor") {
     accessDenied.hidden = false;
     return;
   }
@@ -26,8 +31,7 @@ async function init() {
 }
 
 async function loadSlots() {
-  const response = await fetch("/api/availability");
-  const data = await response.json();
+  const data = await apiFetch("/api/availability");
   tbody.textContent = "";
   for (const slot of data.slots) {
     tbody.appendChild(renderRow(slot));
@@ -58,13 +62,12 @@ function renderRow(slot) {
 
 async function deleteSlot(slot) {
   if (!confirm("Delete this slot?")) return;
-  const response = await fetch(`/api/availability/${slot.id}`, { method: "DELETE" });
-  if (!response.ok) {
-    const data = await response.json();
-    alert(data.error || "Could not delete this slot");
-    return;
+  try {
+    await apiFetch(`/api/availability/${slot.id}`, { method: "DELETE" });
+    await loadSlots();
+  } catch (err) {
+    alert(err.message);
   }
-  await loadSlots();
 }
 
 form.addEventListener("submit", async (event) => {
@@ -78,21 +81,11 @@ form.addEventListener("submit", async (event) => {
   };
 
   try {
-    const response = await fetch("/api/availability", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      formError.textContent = data.error || "Could not add this slot";
-      formError.hidden = false;
-      return;
-    }
+    await apiFetch("/api/availability", { method: "POST", body: JSON.stringify(payload) });
     form.reset();
     await loadSlots();
   } catch (err) {
-    formError.textContent = "Server unreachable — check your network or try again later";
+    formError.textContent = err.message;
     formError.hidden = false;
   } finally {
     saveButton.disabled = false;
@@ -100,8 +93,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 async function loadBookings() {
-  const response = await fetch("/api/bookings");
-  const data = await response.json();
+  const data = await apiFetch("/api/bookings");
   bookingsTbody.textContent = "";
   for (const booking of data.bookings) {
     bookingsTbody.appendChild(renderBookingRow(booking));
@@ -162,13 +154,12 @@ function makeBookingActionButton(label, onClick, confirmMessage) {
 }
 
 async function respondToBooking(bookingId, action) {
-  const response = await fetch(`/api/bookings/${bookingId}/${action}`, { method: "POST" });
-  if (!response.ok) {
-    const data = await response.json();
-    alert(data.error || "Could not update this booking");
-    return;
+  try {
+    await apiFetch(`/api/bookings/${bookingId}/${action}`, { method: "POST" });
+    await Promise.all([loadSlots(), loadBookings()]);
+  } catch (err) {
+    alert(err.message);
   }
-  await Promise.all([loadSlots(), loadBookings()]);
 }
 
 async function completeBooking(bookingId) {
@@ -176,21 +167,23 @@ async function completeBooking(bookingId) {
   const notes = prompt("Session notes:");
   if (notes === null || notes.trim() === "") return;
 
-  const response = await fetch(`/api/bookings/${bookingId}/complete`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ attended, notes: notes.trim() }),
-  });
-  if (!response.ok) {
-    const data = await response.json();
-    alert(data.error || "Could not complete this booking");
-    return;
+  try {
+    await apiFetch(`/api/bookings/${bookingId}/complete`, {
+      method: "POST",
+      body: JSON.stringify({ attended, notes: notes.trim() }),
+    });
+    await Promise.all([loadSlots(), loadBookings()]);
+  } catch (err) {
+    alert(err.message);
   }
-  await Promise.all([loadSlots(), loadBookings()]);
 }
 
 document.getElementById("logout-button").addEventListener("click", async () => {
-  await fetch("/api/logout", { method: "POST" });
+  try {
+    await apiFetch("/api/logout", { method: "POST" });
+  } catch (err) {
+    // Best-effort: send the user back to login regardless.
+  }
   window.location.href = "/login";
 });
 

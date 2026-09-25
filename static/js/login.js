@@ -18,22 +18,13 @@ form.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
 
   try {
-    const response = await fetch("/api/login", {
+    const data = await apiFetch("/api/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    const data = await response.json();
-
-    if (!response.ok) {
-      errorBox.textContent = data.error || "Login failed";
-      errorBox.hidden = false;
-      return;
-    }
-
     window.location.href = ROLE_PAGES[data.role] || "/";
   } catch (err) {
-    errorBox.textContent = "Server unreachable — check your network or try again later";
+    errorBox.textContent = err.message;
     errorBox.hidden = false;
   } finally {
     submitButton.disabled = false;

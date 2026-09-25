@@ -14,13 +14,18 @@ function formatDateTime(iso) {
 }
 
 async function init() {
-  const response = await fetch("/api/me");
-  if (response.status === 401) {
-    window.location.href = "/login";
+  let me;
+  try {
+    me = await apiFetch("/api/me");
+  } catch (err) {
+    if (err.status === 401) {
+      window.location.href = "/login";
+    } else {
+      accessDenied.hidden = false;
+    }
     return;
   }
-  const me = await response.json();
-  if (!response.ok || me.role !== "student") {
+  if (me.role !== "student") {
     accessDenied.hidden = false;
     return;
   }
@@ -29,8 +34,7 @@ async function init() {
 }
 
 async function loadTutors() {
-  const response = await fetch("/api/tutors");
-  const data = await response.json();
+  const data = await apiFetch("/api/tutors");
   tutorsList.textContent = "";
 
   for (const tutor of data.tutors) {
@@ -83,22 +87,19 @@ async function bookSlot(availabilityId, subjectInput) {
     alert("Please enter a subject");
     return;
   }
-  const response = await fetch("/api/bookings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ availability_id: availabilityId, subject }),
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    alert(data.error || "Could not book this slot");
-    return;
+  try {
+    await apiFetch("/api/bookings", {
+      method: "POST",
+      body: JSON.stringify({ availability_id: availabilityId, subject }),
+    });
+    await Promise.all([loadTutors(), loadBookings()]);
+  } catch (err) {
+    alert(err.message);
   }
-  await Promise.all([loadTutors(), loadBookings()]);
 }
 
 async function loadBookings() {
-  const response = await fetch("/api/bookings");
-  const data = await response.json();
+  const data = await apiFetch("/api/bookings");
   bookingsTbody.textContent = "";
   for (const booking of data.bookings) {
     bookingsTbody.appendChild(renderBookingRow(booking));
@@ -145,18 +146,16 @@ function renderBookingRow(booking) {
 
 async function cancelBooking(bookingId) {
   if (!confirm("Cancel this booking?")) return;
-  const response = await fetch(`/api/bookings/${bookingId}/cancel`, { method: "POST" });
-  if (!response.ok) {
-    const data = await response.json();
-    alert(data.error || "Could not cancel this booking");
-    return;
+  try {
+    await apiFetch(`/api/bookings/${bookingId}/cancel`, { method: "POST" });
+    await Promise.all([loadTutors(), loadBookings()]);
+  } catch (err) {
+    alert(err.message);
   }
-  await Promise.all([loadTutors(), loadBookings()]);
 }
 
 async function loadAdvisors() {
-  const response = await fetch("/api/advisors");
-  const data = await response.json();
+  const data = await apiFetch("/api/advisors");
   advisorSelect.textContent = "";
   for (const advisor of data.advisors) {
     const option = document.createElement("option");
@@ -167,8 +166,7 @@ async function loadAdvisors() {
 }
 
 async function loadOfficeHourRequests() {
-  const response = await fetch("/api/office-hours");
-  const data = await response.json();
+  const data = await apiFetch("/api/office-hours");
   officeHoursTbody.textContent = "";
   for (const request of data.requests) {
     officeHoursTbody.appendChild(renderOfficeHourRow(request));
@@ -213,21 +211,11 @@ officeHoursForm.addEventListener("submit", async (event) => {
   };
 
   try {
-    const response = await fetch("/api/office-hours", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      officeHoursError.textContent = data.error || "Could not send this request";
-      officeHoursError.hidden = false;
-      return;
-    }
+    await apiFetch("/api/office-hours", { method: "POST", body: JSON.stringify(payload) });
     officeHoursForm.reset();
     await loadOfficeHourRequests();
   } catch (err) {
-    officeHoursError.textContent = "Server unreachable — check your network or try again later";
+    officeHoursError.textContent = err.message;
     officeHoursError.hidden = false;
   } finally {
     officeHoursSaveButton.disabled = false;
@@ -235,8 +223,7 @@ officeHoursForm.addEventListener("submit", async (event) => {
 });
 
 async function loadLetters() {
-  const response = await fetch("/api/letters");
-  const data = await response.json();
+  const data = await apiFetch("/api/letters");
   lettersTbody.textContent = "";
   for (const letter of data.letters) {
     lettersTbody.appendChild(renderLetterRow(letter));
@@ -269,7 +256,11 @@ function renderLetterRow(letter) {
 }
 
 document.getElementById("logout-button").addEventListener("click", async () => {
-  await fetch("/api/logout", { method: "POST" });
+  try {
+    await apiFetch("/api/logout", { method: "POST" });
+  } catch (err) {
+    // Best-effort: send the user back to login regardless.
+  }
   window.location.href = "/login";
 });
 

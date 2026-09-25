@@ -26,8 +26,15 @@ DB_PATH = DATA_DIR / "studybridge.db"
 # Used from Step 2 onward.
 SESSION_LIFETIME_HOURS = int(os.environ.get("SESSION_LIFETIME_HOURS", "8"))
 
-# Used from Step 9 onward, to reject oversized request bodies (413).
-MAX_BODY_SIZE = int(os.environ.get("MAX_BODY_SIZE", str(6 * 1024 * 1024)))  # 6 MB
+# Reject request bodies larger than this (413). Must comfortably exceed the
+# base64-inflated size of the largest legitimate upload: a 5 MB PDF letter
+# becomes ~6.7 MB once base64-encoded and wrapped in JSON, so this needs
+# real headroom above MAX_LETTER_SIZE, not just a round "big enough" number.
+MAX_BODY_SIZE = int(os.environ.get("MAX_BODY_SIZE", str(8 * 1024 * 1024)))  # 8 MB
 
 # Recommendation letters (Step 8): max size of the decoded PDF file itself.
 MAX_LETTER_SIZE = 5 * 1024 * 1024  # 5 MB
+
+# Socket timeout (Step 9): a client that goes silent mid-request (or never
+# sends one) can't hold a server thread open forever.
+REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT_SECONDS", "30"))
