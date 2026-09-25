@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Bridge &mdash; Tutor</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Tutor dashboard</h1>
+    <button id="logout-button" type="button">Log out</button>
+  </header>
+
+  <p id="access-denied" hidden>Access denied.</p>
+
+  <main id="app" hidden>
+    <section>
+      <h2>My availability</h2>
+      <table id="slots-table">
+        <thead>
+          <tr>
+            <th>Start</th>
+            <th>End</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="slots-tbody"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Add a slot</h2>
+      <form id="slot-form">
+        <label>
+          Start
+          <input type="datetime-local" id="start_at" required />
+        </label>
+        <label>
+          End
+          <input type="datetime-local" id="end_at" required />
+        </label>
+        <button type="submit" id="save-button">Add slot</button>
+        <p id="form-error" role="alert" hidden></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="/static/js/tutor.js"></script>
+</body>
+</html>

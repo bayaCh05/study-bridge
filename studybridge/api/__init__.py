@@ -2,3 +2,4 @@
 
 from studybridge.api import auth_api  # noqa: F401
 from studybridge.api import management  # noqa: F401
+from studybridge.api import tutoring  # noqa: F401
