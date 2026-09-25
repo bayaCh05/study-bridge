@@ -2,6 +2,11 @@ const accessDenied = document.getElementById("access-denied");
 const app = document.getElementById("app");
 const tutorsList = document.getElementById("tutors-list");
 const bookingsTbody = document.getElementById("bookings-tbody");
+const advisorSelect = document.getElementById("advisor-id");
+const officeHoursForm = document.getElementById("office-hours-form");
+const officeHoursError = document.getElementById("office-hours-error");
+const officeHoursSaveButton = document.getElementById("office-hours-save-button");
+const officeHoursTbody = document.getElementById("office-hours-tbody");
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString();
@@ -19,7 +24,7 @@ async function init() {
     return;
   }
   app.hidden = false;
-  await Promise.all([loadTutors(), loadBookings()]);
+  await Promise.all([loadTutors(), loadBookings(), loadAdvisors(), loadOfficeHourRequests()]);
 }
 
 async function loadTutors() {
@@ -147,6 +152,86 @@ async function cancelBooking(bookingId) {
   }
   await Promise.all([loadTutors(), loadBookings()]);
 }
+
+async function loadAdvisors() {
+  const response = await fetch("/api/advisors");
+  const data = await response.json();
+  advisorSelect.textContent = "";
+  for (const advisor of data.advisors) {
+    const option = document.createElement("option");
+    option.value = advisor.id;
+    option.textContent = `${advisor.full_name} (${advisor.email})`;
+    advisorSelect.appendChild(option);
+  }
+}
+
+async function loadOfficeHourRequests() {
+  const response = await fetch("/api/office-hours");
+  const data = await response.json();
+  officeHoursTbody.textContent = "";
+  for (const request of data.requests) {
+    officeHoursTbody.appendChild(renderOfficeHourRow(request));
+  }
+}
+
+function renderOfficeHourRow(request) {
+  const row = document.createElement("tr");
+
+  const advisorCell = document.createElement("td");
+  advisorCell.textContent = request.advisor_name;
+  row.appendChild(advisorCell);
+
+  const whenCell = document.createElement("td");
+  whenCell.textContent = formatDateTime(request.requested_at);
+  row.appendChild(whenCell);
+
+  const reasonCell = document.createElement("td");
+  reasonCell.textContent = request.reason;
+  row.appendChild(reasonCell);
+
+  const statusCell = document.createElement("td");
+  statusCell.textContent = request.status;
+  row.appendChild(statusCell);
+
+  const commentCell = document.createElement("td");
+  commentCell.textContent = request.advisor_comment || "";
+  row.appendChild(commentCell);
+
+  return row;
+}
+
+officeHoursForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  officeHoursError.hidden = true;
+  officeHoursSaveButton.disabled = true;
+
+  const payload = {
+    advisor_id: advisorSelect.value,
+    requested_at: document.getElementById("requested_at").value,
+    reason: document.getElementById("reason").value,
+  };
+
+  try {
+    const response = await fetch("/api/office-hours", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      officeHoursError.textContent = data.error || "Could not send this request";
+      officeHoursError.hidden = false;
+      return;
+    }
+    officeHoursForm.reset();
+    await loadOfficeHourRequests();
+  } catch (err) {
+    officeHoursError.textContent = "Server unreachable — check your network or try again later";
+    officeHoursError.hidden = false;
+  } finally {
+    officeHoursSaveButton.disabled = false;
+  }
+});
 
 document.getElementById("logout-button").addEventListener("click", async () => {
   await fetch("/api/logout", { method: "POST" });

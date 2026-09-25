@@ -36,6 +36,42 @@
         <tbody id="bookings-tbody"></tbody>
       </table>
     </section>
+
+    <section>
+      <h2>Request office hours</h2>
+      <form id="office-hours-form">
+        <label>
+          Advisor
+          <select id="advisor-id" required></select>
+        </label>
+        <label>
+          Requested time
+          <input type="datetime-local" id="requested_at" required />
+        </label>
+        <label>
+          Reason
+          <textarea id="reason" required></textarea>
+        </label>
+        <button type="submit" id="office-hours-save-button">Request</button>
+        <p id="office-hours-error" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section>
+      <h2>My office hour requests</h2>
+      <table id="office-hours-table">
+        <thead>
+          <tr>
+            <th>Advisor</th>
+            <th>Requested time</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Comment</th>
+          </tr>
+        </thead>
+        <tbody id="office-hours-tbody"></tbody>
+      </table>
+    </section>
   </main>
 
   <script src="/static/js/student.js"></script>

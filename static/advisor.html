@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Bridge &mdash; Advisor</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Advisor dashboard</h1>
+    <button id="logout-button" type="button">Log out</button>
+  </header>
+
+  <p id="access-denied" hidden>Access denied.</p>
+
+  <main id="app" hidden>
+    <section>
+      <h2>Office hour requests</h2>
+      <table id="requests-table">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Requested time</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Comment</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="requests-tbody"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/js/advisor.js"></script>
+</body>
+</html>
