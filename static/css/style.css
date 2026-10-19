@@ -1,9 +1,211 @@
+:root {
+  --text: #1a1a1a;
+  --muted: #5b6270;
+  --border: #dde1e6;
+  --bg: #ffffff;
+  --bg-alt: #f6f7f9;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --danger: #b00020;
+  --danger-hover: #8f001a;
+  --success: #1a7f37;
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  font-family: system-ui, sans-serif;
-  max-width: 720px;
-  margin: 3rem auto;
-  padding: 0 1rem;
-  color: #1a1a1a;
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 960px;
+  margin: 2.5rem auto;
+  padding: 0 1.25rem 4rem;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.75rem;
+  border-bottom: 2px solid var(--border);
+}
+
+section {
+  margin-bottom: 2.25rem;
+}
+
+/* --- Forms ------------------------------------------------------------ */
+
+form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.9rem;
+}
+
+form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+textarea {
+  min-height: 2.4rem;
+  resize: vertical;
+}
+
+/* --- Buttons ------------------------------------------------------------ */
+
+button {
+  font: inherit;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+  color: var(--text);
+  cursor: pointer;
+}
+
+button:hover {
+  background: #eceef1;
+}
+
+button[type="submit"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+button[type="submit"]:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#logout-button {
+  background: var(--bg);
+}
+
+/* --- Tables ------------------------------------------------------------ */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+tbody tr:hover {
+  background: var(--bg-alt);
+}
+
+td button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  margin-right: 0.35rem;
+}
+
+/* --- Misc ------------------------------------------------------------ */
+
+.empty-state {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.count {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 0.6rem;
+}
+
+[role="alert"] {
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin: 0.3rem 0 0;
+}
+
+#tutors-list > div {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+#tutors-list h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+#tutors-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#tutors-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 #offline-banner {
@@ -11,7 +213,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  background: #b00020;
+  background: var(--danger);
   color: #fff;
   text-align: center;
   padding: 0.6rem 1rem;
@@ -25,33 +227,17 @@ body {
   right: 1rem;
   max-width: 320px;
   padding: 0.6rem 1rem;
-  border-radius: 4px;
+  border-radius: var(--radius);
   color: #fff;
   font-weight: bold;
   z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 #toast.toast-success {
-  background: #1a7f37;
+  background: var(--success);
 }
 
 #toast.toast-error {
-  background: #b00020;
-}
-
-.empty-state {
-  color: #666;
-  font-style: italic;
-}
-
-.count {
-  color: #555;
-  font-size: 0.9rem;
-  margin: 0 0 0.5rem;
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  background: var(--danger);
 }
