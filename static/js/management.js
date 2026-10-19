@@ -10,6 +10,7 @@ const saveButton = document.getElementById("save-button");
 const cancelEditButton = document.getElementById("cancel-edit");
 const passwordLabel = document.getElementById("password-label");
 const passwordInput = document.getElementById("password");
+const usersCount = document.getElementById("users-count");
 
 async function init() {
   let me;
@@ -44,6 +45,12 @@ function buildQuery() {
 async function loadUsers() {
   const data = await apiFetch(`/api/users${buildQuery()}`);
   tbody.textContent = "";
+  const active = data.users.filter((user) => user.is_active).length;
+  usersCount.textContent = `${data.users.length} user(s), ${active} active`;
+  if (data.users.length === 0) {
+    tbody.appendChild(emptyRow(5, "No users match this filter."));
+    return;
+  }
   for (const user of data.users) {
     tbody.appendChild(renderRow(user));
   }
@@ -139,8 +146,10 @@ form.addEventListener("submit", async (event) => {
       payload.password = passwordInput.value;
       await apiFetch("/api/users", { method: "POST", body: JSON.stringify(payload) });
     }
+    const wasEditing = Boolean(state.editingId);
     resetForm();
     await loadUsers();
+    showToast(wasEditing ? "User updated" : "User created");
   } catch (err) {
     formError.textContent = err.message;
     formError.hidden = false;
@@ -154,8 +163,9 @@ async function toggleActive(user) {
   try {
     await apiFetch(`/api/users/${user.id}/${action}`, { method: "POST" });
     await loadUsers();
+    showToast(action === "deactivate" ? "User deactivated" : "User reactivated");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 
@@ -164,8 +174,9 @@ async function deleteUser(user) {
   try {
     await apiFetch(`/api/users/${user.id}`, { method: "DELETE" });
     await loadUsers();
+    showToast("User deleted");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 

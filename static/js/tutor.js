@@ -5,6 +5,8 @@ const form = document.getElementById("slot-form");
 const formError = document.getElementById("form-error");
 const saveButton = document.getElementById("save-button");
 const bookingsTbody = document.getElementById("bookings-tbody");
+const slotsCount = document.getElementById("slots-count");
+const bookingsCount = document.getElementById("bookings-count");
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString();
@@ -33,6 +35,11 @@ async function init() {
 async function loadSlots() {
   const data = await apiFetch("/api/availability");
   tbody.textContent = "";
+  slotsCount.textContent = `${data.slots.length} upcoming slot(s)`;
+  if (data.slots.length === 0) {
+    tbody.appendChild(emptyRow(3, "No upcoming slots yet."));
+    return;
+  }
   for (const slot of data.slots) {
     tbody.appendChild(renderRow(slot));
   }
@@ -65,8 +72,9 @@ async function deleteSlot(slot) {
   try {
     await apiFetch(`/api/availability/${slot.id}`, { method: "DELETE" });
     await loadSlots();
+    showToast("Slot deleted");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 
@@ -84,6 +92,7 @@ form.addEventListener("submit", async (event) => {
     await apiFetch("/api/availability", { method: "POST", body: JSON.stringify(payload) });
     form.reset();
     await loadSlots();
+    showToast("Slot added");
   } catch (err) {
     formError.textContent = err.message;
     formError.hidden = false;
@@ -95,6 +104,11 @@ form.addEventListener("submit", async (event) => {
 async function loadBookings() {
   const data = await apiFetch("/api/bookings");
   bookingsTbody.textContent = "";
+  bookingsCount.textContent = `${data.bookings.length} booking(s)`;
+  if (data.bookings.length === 0) {
+    bookingsTbody.appendChild(emptyRow(6, "No bookings yet."));
+    return;
+  }
   for (const booking of data.bookings) {
     bookingsTbody.appendChild(renderBookingRow(booking));
   }
@@ -153,12 +167,15 @@ function makeBookingActionButton(label, onClick, confirmMessage) {
   return button;
 }
 
+const BOOKING_ACTION_TOAST = { accept: "Booking accepted", decline: "Booking declined", cancel: "Booking cancelled" };
+
 async function respondToBooking(bookingId, action) {
   try {
     await apiFetch(`/api/bookings/${bookingId}/${action}`, { method: "POST" });
     await Promise.all([loadSlots(), loadBookings()]);
+    showToast(BOOKING_ACTION_TOAST[action] || "Booking updated");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 
@@ -173,8 +190,9 @@ async function completeBooking(bookingId) {
       body: JSON.stringify({ attended, notes: notes.trim() }),
     });
     await Promise.all([loadSlots(), loadBookings()]);
+    showToast("Session report saved");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 

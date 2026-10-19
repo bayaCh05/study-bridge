@@ -6,6 +6,8 @@ const letterForm = document.getElementById("letter-form");
 const letterError = document.getElementById("letter-error");
 const letterSaveButton = document.getElementById("letter-save-button");
 const lettersTbody = document.getElementById("letters-tbody");
+const requestsCount = document.getElementById("requests-count");
+const lettersCount = document.getElementById("letters-count");
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString();
@@ -34,6 +36,12 @@ async function init() {
 async function loadRequests() {
   const data = await apiFetch("/api/office-hours");
   tbody.textContent = "";
+  const pending = data.requests.filter((request) => request.status === "pending").length;
+  requestsCount.textContent = `${data.requests.length} request(s), ${pending} pending`;
+  if (data.requests.length === 0) {
+    tbody.appendChild(emptyRow(6, "No office hour requests yet."));
+    return;
+  }
   for (const request of data.requests) {
     tbody.appendChild(renderRow(request));
   }
@@ -86,8 +94,9 @@ async function respond(requestId, action) {
   try {
     await apiFetch(`/api/office-hours/${requestId}/${action}`, { method: "POST", body: JSON.stringify({ comment }) });
     await loadRequests();
+    showToast(action === "accept" ? "Request accepted" : "Request rejected");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 
@@ -141,6 +150,7 @@ letterForm.addEventListener("submit", async (event) => {
     });
     letterForm.reset();
     await loadLetters();
+    showToast("Letter uploaded");
   } catch (err) {
     letterError.textContent = err.message;
     letterError.hidden = false;
@@ -152,6 +162,11 @@ letterForm.addEventListener("submit", async (event) => {
 async function loadLetters() {
   const data = await apiFetch("/api/letters");
   lettersTbody.textContent = "";
+  lettersCount.textContent = `${data.letters.length} letter(s) uploaded`;
+  if (data.letters.length === 0) {
+    lettersTbody.appendChild(emptyRow(4, "No letters uploaded yet."));
+    return;
+  }
   for (const letter of data.letters) {
     lettersTbody.appendChild(renderLetterRow(letter));
   }

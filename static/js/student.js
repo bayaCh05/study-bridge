@@ -8,6 +8,10 @@ const officeHoursError = document.getElementById("office-hours-error");
 const officeHoursSaveButton = document.getElementById("office-hours-save-button");
 const officeHoursTbody = document.getElementById("office-hours-tbody");
 const lettersTbody = document.getElementById("letters-tbody");
+const tutorsCount = document.getElementById("tutors-count");
+const bookingsCount = document.getElementById("bookings-count");
+const officeHoursCount = document.getElementById("office-hours-count");
+const lettersCount = document.getElementById("letters-count");
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString();
@@ -36,6 +40,16 @@ async function init() {
 async function loadTutors() {
   const data = await apiFetch("/api/tutors");
   tutorsList.textContent = "";
+  const withFreeSlots = data.tutors.filter((tutor) => tutor.slots.length > 0).length;
+  tutorsCount.textContent = `${data.tutors.length} tutor(s), ${withFreeSlots} with free slots`;
+
+  if (data.tutors.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "No tutors yet.";
+    tutorsList.appendChild(empty);
+    return;
+  }
 
   for (const tutor of data.tutors) {
     const card = document.createElement("div");
@@ -93,14 +107,20 @@ async function bookSlot(availabilityId, subjectInput) {
       body: JSON.stringify({ availability_id: availabilityId, subject }),
     });
     await Promise.all([loadTutors(), loadBookings()]);
+    showToast("Booking requested");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 
 async function loadBookings() {
   const data = await apiFetch("/api/bookings");
   bookingsTbody.textContent = "";
+  bookingsCount.textContent = `${data.bookings.length} booking(s)`;
+  if (data.bookings.length === 0) {
+    bookingsTbody.appendChild(emptyRow(6, "No bookings yet."));
+    return;
+  }
   for (const booking of data.bookings) {
     bookingsTbody.appendChild(renderBookingRow(booking));
   }
@@ -149,8 +169,9 @@ async function cancelBooking(bookingId) {
   try {
     await apiFetch(`/api/bookings/${bookingId}/cancel`, { method: "POST" });
     await Promise.all([loadTutors(), loadBookings()]);
+    showToast("Booking cancelled");
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, true);
   }
 }
 
@@ -168,6 +189,11 @@ async function loadAdvisors() {
 async function loadOfficeHourRequests() {
   const data = await apiFetch("/api/office-hours");
   officeHoursTbody.textContent = "";
+  officeHoursCount.textContent = `${data.requests.length} request(s)`;
+  if (data.requests.length === 0) {
+    officeHoursTbody.appendChild(emptyRow(5, "No office hour requests yet."));
+    return;
+  }
   for (const request of data.requests) {
     officeHoursTbody.appendChild(renderOfficeHourRow(request));
   }
@@ -214,6 +240,7 @@ officeHoursForm.addEventListener("submit", async (event) => {
     await apiFetch("/api/office-hours", { method: "POST", body: JSON.stringify(payload) });
     officeHoursForm.reset();
     await loadOfficeHourRequests();
+    showToast("Office hour requested");
   } catch (err) {
     officeHoursError.textContent = err.message;
     officeHoursError.hidden = false;
@@ -225,6 +252,11 @@ officeHoursForm.addEventListener("submit", async (event) => {
 async function loadLetters() {
   const data = await apiFetch("/api/letters");
   lettersTbody.textContent = "";
+  lettersCount.textContent = `${data.letters.length} letter(s)`;
+  if (data.letters.length === 0) {
+    lettersTbody.appendChild(emptyRow(4, "No recommendation letters yet."));
+    return;
+  }
   for (const letter of data.letters) {
     lettersTbody.appendChild(renderLetterRow(letter));
   }

@@ -130,3 +130,35 @@ async function checkHealth() {
 window.addEventListener("offline", showOfflineBanner);
 window.addEventListener("online", checkHealth);
 checkHealth();
+
+// --- Toast (success/error feedback after an action) -----------------------
+
+let toastTimer = null;
+
+function showToast(message, isError = false) {
+  let toast = document.getElementById("toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.className = isError ? "toast-error" : "toast-success";
+  toast.hidden = false;
+  if (toastTimer !== null) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 3000);
+}
+
+// --- Empty-state table row, shared by every dashboard table ---------------
+
+function emptyRow(colspan, text) {
+  const row = document.createElement("tr");
+  const cell = document.createElement("td");
+  cell.colSpan = colspan;
+  cell.className = "empty-state";
+  cell.textContent = text;
+  row.appendChild(cell);
+  return row;
+}

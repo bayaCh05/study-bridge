@@ -18,3 +18,40 @@ body {
   font-weight: bold;
   z-index: 1000;
 }
+
+#toast {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  max-width: 320px;
+  padding: 0.6rem 1rem;
+  border-radius: 4px;
+  color: #fff;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+#toast.toast-success {
+  background: #1a7f37;
+}
+
+#toast.toast-error {
+  background: #b00020;
+}
+
+.empty-state {
+  color: #666;
+  font-style: italic;
+}
+
+.count {
+  color: #555;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

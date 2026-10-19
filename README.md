@@ -5,9 +5,21 @@ module only** (no Django/Flask/FastAPI).
 
 ## Status
 
-Steps 0-9 done: bare HTTP server, database, auth, management CRUD, tutor availability, booking,
-session reports, office hours, recommendation letters, and graceful handling of server/network issues.
-(Full per-role feature writeup and polish come in Step 10.)
+All 10 steps done: bare HTTP server, database, auth, management CRUD, tutor availability, booking,
+session reports, office hours, recommendation letters, graceful handling of server/network issues, and
+final polish (consistent navigation, success/error feedback, empty states, dashboard counts).
+
+## Features per role
+
+| Role | Can do |
+|---|---|
+| **Student** | Browse tutors and their free slots and book one; see all own bookings and their status; request office hours with an advisor and see the advisor's response; download recommendation letters written for them |
+| **Tutor** | Add/delete availability slots (no overlaps, future only); accept/decline incoming bookings; cancel a confirmed booking; mark a past confirmed session complete with an attendance + notes report |
+| **Advisor** | See all office-hour requests addressed to them and accept/reject with an optional comment; upload a PDF recommendation letter for a student; see letters they've uploaded |
+| **Management** | Full CRUD on students/tutors/advisors/management accounts (filter/search, create, edit, deactivate/reactivate, delete); cannot deactivate or delete themselves |
+
+Cross-cutting: session-cookie authentication with role-based access on every API route, and graceful
+handling of server-down / network-down conditions (see "Manual test scenarios" below).
 
 ## Requirements
 
@@ -34,7 +46,9 @@ On the Ubuntu Server VM, this becomes:
 HOST=0.0.0.0 PORT=8000 python3 run.py
 ```
 
-so the client VMs on the network can reach it at `http://192.168.100.10:8000`.
+so other machines on the network can reach it — see "Deploying on 3 physical machines (mobile hotspot)"
+below for the actual grading-demo setup, or `http://192.168.100.10:8000` for the original VirtualBox
+`intnet` setup.
 
 Other environment variables (all optional):
 
@@ -79,6 +93,61 @@ These aren't practical to automate, so test them by hand:
 - **Trigger the offline banner from the browser's own network state:** DevTools → Network tab → set to
   "Offline". The banner should appear immediately via the browser's `offline` event, without waiting for a
   failed request.
+
+## Deploying on 3 physical machines (mobile hotspot)
+
+For the "Good"/"Prestigious" grading tiers, the demo runs on **3 real physical machines** (not just
+VirtualBox VMs) joined to the same **mobile hotspot** Wi-Fi network — one machine runs the server, the
+other two act as clients. The app needs no separate "client install": a client machine only needs a web
+browser, since the server serves the HTML/CSS/JS itself.
+
+**1. Join all 3 machines to the same hotspot.** Turn on the phone's (or laptop's) mobile hotspot, and
+connect all 3 machines (or their VMs, bridged — not NAT — to the host's Wi-Fi) to that same Wi-Fi network.
+
+**2. On the server machine**, find the IP address the hotspot assigned it:
+
+```bash
+ip addr show | grep "inet "
+```
+
+Look for the address on the Wi-Fi interface (not `127.0.0.1`), e.g. `192.168.43.117`. This address can
+change each time the hotspot is (re)joined — unlike the fixed `192.168.100.10` used on the VirtualBox
+`intnet`, a hotspot hands out addresses by DHCP, so re-check it if the server is restarted on a different
+network.
+
+**3. On the server machine**, seed demo data (first time only) and run the server bound to all interfaces:
+
+```bash
+python3 -m studybridge.seed        # first time only
+HOST=0.0.0.0 PORT=8000 python3 run.py
+```
+
+If a firewall is active (`sudo ufw status`), open the port:
+
+```bash
+sudo ufw allow 8000/tcp
+```
+
+**4. On each client machine**, confirm it can reach the server, then open it in a browser:
+
+```bash
+ping 192.168.43.117                        # replace with the server's actual IP
+curl http://192.168.43.117:8000/health     # expect {"status": "ok", "database": "ok"}
+```
+
+Then open `http://192.168.43.117:8000/` in a browser and log in with one of the [demo accounts](#demo-accounts)
+— each client machine should use a **different role** so the simultaneous-use scenarios in the grading
+rubric are actually demonstrated (e.g. client 1 logs in as the student, client 2 as the tutor or advisor).
+
+**5. Repeat the Step 9 network-issue scenarios across real machines**, not just VirtualBox cable toggles:
+kill the server process, turn off the server machine's Wi-Fi, or have it leave the hotspot — each client's
+offline banner should appear within ~10s and clear once connectivity returns.
+
+**Prestigious tier (MITM demo):** this only works because the traffic is **plain HTTP, not HTTPS** — do
+not add TLS to the server. A third physical machine on the same hotspot can run a MITM tool (e.g.
+`arpspoof` + `wireshark`, or `ettercap`) to capture the plaintext login request between a client and the
+server and show the credentials in the clear. This is a separate, explicit step to set up when you're
+ready to rehearse it — ask then and we'll go through it together.
 
 ## Architecture
 
