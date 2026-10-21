@@ -130,7 +130,10 @@ function renderBookingRow(booking) {
   row.appendChild(whenCell);
 
   const statusCell = document.createElement("td");
-  statusCell.textContent = booking.status;
+  const statusBadge = document.createElement("span");
+  statusBadge.className = `status status-${booking.status}`;
+  statusBadge.textContent = booking.status;
+  statusCell.appendChild(statusBadge);
   row.appendChild(statusCell);
 
   const reportCell = document.createElement("td");

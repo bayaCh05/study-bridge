@@ -63,7 +63,10 @@ function renderRow(request) {
   row.appendChild(reasonCell);
 
   const statusCell = document.createElement("td");
-  statusCell.textContent = request.status;
+  const statusBadge = document.createElement("span");
+  statusBadge.className = `status status-${request.status}`;
+  statusBadge.textContent = request.status;
+  statusCell.appendChild(statusBadge);
   row.appendChild(statusCell);
 
   const commentCell = document.createElement("td");

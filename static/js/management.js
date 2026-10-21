@@ -72,7 +72,10 @@ function renderRow(user) {
   row.appendChild(roleCell);
 
   const statusCell = document.createElement("td");
-  statusCell.textContent = user.is_active ? "active" : "inactive";
+  const statusBadge = document.createElement("span");
+  statusBadge.className = `status status-${user.is_active ? "active" : "inactive"}`;
+  statusBadge.textContent = user.is_active ? "active" : "inactive";
+  statusCell.appendChild(statusBadge);
   row.appendChild(statusCell);
 
   const actionsCell = document.createElement("td");
