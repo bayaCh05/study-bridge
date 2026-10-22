@@ -9,7 +9,7 @@ Oct 19, 2026 · @baya
 - [ ] Decide who logs in as which role on which physical machine, so the "simultaneous roles" demo is real, not staged
 - [ ] Server VM: repo pulled (`git pull origin main`), ready to run
 - [ ] Each client machine just needs a modern browser — no install needed (a VM is optional, not required)
-- [ ] Whichever machine runs the Wireshark capture: confirm Wireshark or `tcpdump` is installed there
+- [ ] On the Mac (the attacker machine): `brew install dsniff` and Wireshark both installed — test `arpspoof` once before the real presentation, on this same hotspot, to confirm the AP doesn't block device-to-device ARP (see Troubleshooting)
 
 ## Network setup (join the hotspot)
 
@@ -59,52 +59,83 @@ Then open `http://<server-ip>:8000/login` in the browser, log in with a demo acc
 
 Repeat from a second client, logged in as a different role, at the same time, to demonstrate concurrent multi-role use.
 
-## Wireshark MITM capture
+## Man-in-the-middle attack (ARP spoofing — the real thing)
 
-Pick the capture method for whichever host is doing it.
+The brief requires a genuine intercepting attacker, not just a passive capture of your own traffic. The Mac is the attacker; the two Ubuntu VMs are the victims (client and server). Two terminals on the Mac run the attack; it keeps running for the rest of the demo.
 
-**Client with no VM (recommended path)** — capture its own Wi-Fi interface directly:
+**0. Get the real IPs first**, on each VM: `ip addr show | grep 'inet '`. On the Mac: `ifconfig en0 | grep 'inet '`. All three must be on the same hotspot subnet (e.g. `172.20.10.0/28`).
+
+**1. Install the tool on the Mac** (once, ahead of time): `brew install dsniff` — gives you `arpspoof`.
+
+**2. Enable IP forwarding on the Mac** — this is what keeps the connection alive while intercepting it:
 
 ```bash
-sudo tcpdump -i en0 -w ~/captures/client.pcap 'tcp port 8000'
+sudo sysctl -w net.inet.ip.forwarding=1
+sysctl net.inet.ip.forwarding   # confirm it prints "net.inet.ip.forwarding: 1"
 ```
 
-(swap `en0` for the actual Wi-Fi interface name if different — check with `ifconfig` or Wireshark's interface list). Stop with Ctrl+C when done, or just open Wireshark.app, pick the Wi-Fi interface, and start/stop the capture from its UI.
+**3. Capture the "before" ARP state** on the client VM (for the live before/after comparison):
 
-**Host running a VM** — `VBoxManage nictrace` captures that VM's own traffic locally:
-
-```powershell
-mkdir C:\captures
-$env:Path += ";C:\Program Files\Oracle\VirtualBox"
-VBoxManage showvminfo "<VM name>" | findstr /i "NIC"
-VBoxManage controlvm "<VM name>" nictracefile<N> "C:\captures\<vmname>.pcap"
-VBoxManage controlvm "<VM name>" nictrace<N> on
+```bash
+arp -a | grep <server-ip>
 ```
 
-Stop before opening the file: `VBoxManage controlvm "<VM name>" nictrace<N> off`.
+**4. Start Wireshark on the Mac first** — `Wi-Fi: en0`, no filter, so it captures the ARP packets too, not just HTTP.
 
-Either way: generate real traffic by actually **submitting the login form** (fill email + password, click "Log in") on the client being captured — a bare `curl` GET won't capture credentials, since they only go out in the login POST body.
+**5. Run the spoof — two terminals on the Mac, both left running for the rest of the demo:**
 
-Merge multiple capture files in Wireshark (**File → Merge**) for one combined view.
+```bash
+# Terminal A — tells the client "the server is at my MAC"
+sudo arpspoof -i en0 -t <client-ip> <server-ip>
+
+# Terminal B — tells the server "the client is at my MAC"
+sudo arpspoof -i en0 -t <server-ip> <client-ip>
+```
+
+**6. Prove the poisoning worked** — back on the client VM: `arp -a | grep <server-ip>` again. The MAC address for the server's IP should now match the **Mac's** MAC instead of the real server's. This before/after is the clean, concrete proof point.
+
+**7. Trigger real traffic** — on the client VM's browser, actually submit the login form (not `curl` — credentials only go out in the POST body).
+
+**8. In Wireshark**, filter `http.request.method == "POST" && http.request.uri == "/api/login"`, right-click the packet → **Follow → TCP Stream** — the plaintext JSON body with the credentials is now visible, captured on the Mac even though the Mac was never meant to see this traffic.
+
+**9. Clean up afterward:** Ctrl+C both `arpspoof` terminals, then `sudo sysctl -w net.inet.ip.forwarding=0`, and optionally `sudo ip -s -s neigh flush all` on each VM to force a fast recovery of the correct ARP entries.
+
+## How to demo it live — run of show
+
+Do these in order, narrating each step out loud (the brief says you'll be questioned throughout, not after):
+
+1. **Show the architecture slide first** — point out the three machines and name the Mac as the malicious component, before touching a keyboard.
+2. **Open three terminal/browser windows side by side** if possible: client VM (browser + terminal), server VM (terminal, showing its access log live), Mac (two arpspoof terminals + Wireshark).
+3. **Show the "before" state**: `arp -a` on the client VM, pointing at the real server MAC address. Say what a MAC address is and why ARP exists (IP → MAC resolution).
+4. **Start Wireshark capturing**, no filter yet — say you're watching all traffic, including the ARP layer.
+5. **Launch both `arpspoof` commands**, explain each flag out loud as you type it (`-i` interface, `-t` the victim being lied to, the IP being impersonated).
+6. **Re-run `arp -a` on the client VM** — show the MAC address has changed to the Mac's. This is your strongest "I understand what's happening at L2" moment.
+7. **Filter Wireshark on `arp`** briefly — show the forged replies going out continuously from the Mac's MAC, claiming to be both victim IPs.
+8. **Switch to the client VM's browser**, submit a real login.
+9. **Back in Wireshark**, filter `http.request.method == "POST" && http.request.uri == "/api/login"`, open the one matching packet, walk through its fields out loud: request line, `Host`, `Content-Type`, the JSON body.
+10. **Follow → TCP Stream** — point at the plaintext email and password.
+11. **Switch to the server VM's terminal**, show its access log line for this same request — point out the source IP is still the *real* client's IP, because ARP spoofing only rewrites MAC addresses, not IP addresses, so the server has no way to detect the interception at this layer. This is a strong answer if asked "how would the server know?"
+12. **Close with the "why this matters" line**: Study Bridge runs on plain HTTP on purpose — TLS is specifically what defeats this attack, because the attacker would only see ciphertext even after successfully rerouting the traffic.
+13. **Clean up live** (Ctrl+C both arpspoof terminals, disable IP forwarding) before moving to the conclusion slide.
 
 ## What to show the jury
-
-Filter the merged capture: `http.request.method == "POST" && http.request.uri == "/api/login"`, then right-click the packet → **Follow → TCP Stream**. This shows the full request in plain text, including the JSON body with the student's email and password — direct proof the traffic is unencrypted HTTP.
 
 Tie it to the grading rubric:
 
 | Tier | Requirement | Status |
 | --- | --- | --- |
 | Pass | Infra + server running, 5 HTTP status codes demonstrated | Done (Step 0-9) |
-| Good | Demo on 3 physical machines over a mobile hotspot | Live: 3 bridged VMs, different roles logged in simultaneously |
-| Prestigious | MITM demo showing plaintext HTTP credentials | Live: Follow TCP Stream on the `/api/login` capture |
+| Good | Demo on 3 physical machines over a mobile hotspot | Live: 2 bridged VMs + the Mac, different roles logged in simultaneously |
+| Prestigious | MITM demo showing plaintext HTTP credentials | Live: ARP-spoofed interception + Follow TCP Stream on the `/api/login` capture |
 
 Say explicitly why this works: Study Bridge is deliberately plain HTTP, never HTTPS, so the capture directly demonstrates why authentication needs TLS in production — it's the point of the demo, not a workaround.
 
 ## Troubleshooting
 
-- **No HTTP packets in the capture:** confirm the trace was started *before* the login form was submitted, and that the browser didn't silently upgrade to `https://` (check the address bar, or use `curl` to rule it out).
-- **Client can't reach the server at all:** re-check both machines are actually on the hotspot (not still on old Wi-Fi/campus network), and that a VM-based machine's adapter is genuinely Bridged if it's using one — `ip addr`/`ifconfig` should show the new hotspot subnet.
+- **No HTTP packets in the capture:** confirm Wireshark was started *before* the login form was submitted, and that the browser didn't silently upgrade to `https://` (check the address bar).
+- **`arp -a` never changes / arpspoof has no visible effect:** the access point likely has **client/AP isolation** enabled, which blocks direct device-to-device traffic (including ARP) even though each device can still reach the internet individually. This is common on some phone personal hotspots. Test well before the real presentation; if it's blocked, you'll need a hotspot/router without isolation enabled — a plain home router rarely has this on.
+- **Client can't reach the server at all:** re-check both VMs are actually on the hotspot (not still on old Wi-Fi/campus network), and that each VM's adapter is genuinely Bridged, not NAT — `ip addr` should show the hotspot subnet.
 - **`curl: Connection refused`:** the server isn't bound to `0.0.0.0` — confirm it was started with `HOST=0.0.0.0`, not left at the default `127.0.0.1`.
 - **`/health` returns `"database": "down"`:** the `data/` folder wasn't seeded, or the db file got renamed/moved — rerun `python3 -m studybridge.seed`.
-- **Empty capture file:** for `tcpdump`, confirm the interface name is right and you used `sudo`; for a VM's `nictrace`, confirm `C:\captures` exists and the trace was started on the correct NIC number.
+- **`arpspoof: command not found`:** `brew install dsniff` wasn't run, or `/opt/homebrew/bin` (or `/usr/local/bin`) isn't on `PATH`.
+- **Connectivity drops entirely once arpspoof starts:** IP forwarding wasn't actually enabled — re-run `sudo sysctl -w net.inet.ip.forwarding=1` and confirm with `sysctl net.inet.ip.forwarding`.
