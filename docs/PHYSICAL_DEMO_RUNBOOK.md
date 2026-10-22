@@ -59,64 +59,86 @@ Then open `http://<server-ip>:8000/login` in the browser, log in with a demo acc
 
 Repeat from a second client, logged in as a different role, at the same time, to demonstrate concurrent multi-role use.
 
-## Man-in-the-middle attack (ARP spoofing — the real thing)
+## IMPORTANT — read this before the demo
 
-The brief requires a genuine intercepting attacker, not just a passive capture of your own traffic. The Mac is the attacker; the two Ubuntu VMs are the victims (client and server). Two terminals on the Mac run the attack; it keeps running for the rest of the demo.
+Tested on 2026-10-22: the ARP spoof commands below run without error, but did **not** actually poison the client VM's ARP table on this hotspot (confirmed via `ip neigh` on the client). The likely cause is **AP client isolation** — a common setting on phone personal hotspots that blocks direct device-to-device traffic (including ARP) between connected clients, while still allowing normal internet/gateway traffic (which is why the app itself works fine across machines, and why yesterday's passive capture worked). This is a property of the network, not a mistake in the commands — `dsniff`'s `arpspoof` was also removed from Homebrew, so the tool below is `bettercap` instead.
 
-**0. Get the real IPs first**, on each VM: `ip addr show | grep 'inet '`. On the Mac: `ifconfig en0 | grep 'inet '`. All three must be on the same hotspot subnet (e.g. `172.20.10.0/28`).
+**There are two valid ways to run this demo tomorrow — decide live, don't stress about it in advance:**
 
-**1. Install the tool on the Mac** (once, ahead of time): `brew install dsniff` — gives you `arpspoof`.
+- **If you can test on a different Wi-Fi network beforehand** (a plain router, not a phone hotspot) and it works there, use that network for the real demo and follow "Steps" below exactly — full live interception.
+- **If you're stuck on a hotspot with isolation**, follow "Steps," then when the ARP table doesn't change, calmly explain why (below) and move to "If the spoof doesn't land" instead. This is a legitimate, prepared outcome — not a failure. The brief asks you to demonstrate understanding of the network communication, not guarantee a flawless live exploit.
 
-**2. Enable IP forwarding on the Mac** — this is what keeps the connection alive while intercepting it:
+## Man-in-the-middle attack (ARP spoofing)
+
+The Mac is the attacker; the two Ubuntu VMs are the victims (client and server). One terminal on the Mac runs the attack; it keeps running for the rest of the demo.
+
+**0. Get the real IPs first**, on each VM: `ip addr show | grep 'inet '` (if `ip` isn't there, `sudo apt install net-tools` then `ifconfig`). On the Mac: `ifconfig en0 | grep 'inet '`. All three must be on the same hotspot subnet (e.g. `172.20.10.0/28`).
+
+**1. The tool is already installed on the Mac**: `bettercap` (via `brew install bettercap` — `dsniff`/`arpspoof` was removed from Homebrew, don't bother with it).
+
+**2. IP forwarding** — bettercap manages this itself when `arp.spoof` is on, but as a belt-and-suspenders check, you can also run:
 
 ```bash
 sudo sysctl -w net.inet.ip.forwarding=1
 sysctl net.inet.ip.forwarding   # confirm it prints "net.inet.ip.forwarding: 1"
 ```
 
-**3. Capture the "before" ARP state** on the client VM (for the live before/after comparison):
+**3. Capture the "before" ARP state** on the client VM (for the live before/after comparison). If `arp` isn't installed: `sudo apt install net-tools`, or just use `ip neigh` directly:
 
 ```bash
-arp -a | grep <server-ip>
+ip neigh show <server-ip>
 ```
 
 **4. Start Wireshark on the Mac first** — `Wi-Fi: en0`, no filter, so it captures the ARP packets too, not just HTTP.
 
-**5. Run the spoof — two terminals on the Mac, both left running for the rest of the demo:**
+**5. Run the spoof — one terminal on the Mac, left running for the rest of the demo:**
 
 ```bash
-# Terminal A — tells the client "the server is at my MAC"
-sudo arpspoof -i en0 -t <client-ip> <server-ip>
-
-# Terminal B — tells the server "the client is at my MAC"
-sudo arpspoof -i en0 -t <server-ip> <client-ip>
+sudo bettercap -iface en0
+```
+Then inside bettercap's own prompt, type (no `< >` brackets, no spaces around the comma — use the real IPs):
+```
+set arp.spoof.targets <client-ip>,<server-ip>
+arp.spoof on
 ```
 
-**6. Prove the poisoning worked** — back on the client VM: `arp -a | grep <server-ip>` again. The MAC address for the server's IP should now match the **Mac's** MAC instead of the real server's. This before/after is the clean, concrete proof point.
+**6. Check whether the poisoning actually worked** — back on the client VM: `ip neigh show <server-ip>` again. If it worked, the MAC address for the server's IP now matches the **Mac's** MAC instead of the real server's.
+
+- **If it changed → full live interception.** Go to step 7.
+- **If it's unchanged after ~15 seconds →** say so out loud, calmly: *"The hotspot has client isolation enabled, which blocks direct device-to-device traffic — the commands are correct, but this specific access point won't allow it."* Then skip to **"If the spoof doesn't land"** below instead of step 7.
 
 **7. Trigger real traffic** — on the client VM's browser, actually submit the login form (not `curl` — credentials only go out in the POST body).
 
 **8. In Wireshark**, filter `http.request.method == "POST" && http.request.uri == "/api/login"`, right-click the packet → **Follow → TCP Stream** — the plaintext JSON body with the credentials is now visible, captured on the Mac even though the Mac was never meant to see this traffic.
 
-**9. Clean up afterward:** Ctrl+C both `arpspoof` terminals, then `sudo sysctl -w net.inet.ip.forwarding=0`, and optionally `sudo ip -s -s neigh flush all` on each VM to force a fast recovery of the correct ARP entries.
+**9. Clean up afterward:** in the bettercap prompt, `arp.spoof off` then `quit`; then `sudo sysctl -w net.inet.ip.forwarding=0`.
+
+## If the spoof doesn't land
+
+This is a planned, acceptable outcome — not a failure. Do this instead of steps 7–9:
+
+1. **Explain the mechanism anyway, using what's on screen**: point at the `bettercap` output (`arp spoofer started, probing 2 targets`) and explain exactly what it *would* do if it weren't blocked — forge ARP replies telling each victim "I am the other machine," so traffic routes through the Mac. This is real, correct, demonstrable knowledge even without a successful poison.
+2. **Name the blocker precisely**: AP/client isolation, a Wi-Fi access-point feature that blocks direct station-to-station traffic (including ARP) while still allowing each device to reach the internet/gateway individually — which is exactly why the app itself works fine across machines, but this doesn't.
+3. **Show the plaintext proof a different way**: do a plain passive capture instead — start a fresh Wireshark capture, have the client submit a real login, filter on the POST, Follow → TCP Stream. This proves the HTTP traffic itself is unencrypted (the core Prestigious-tier point), even though this particular network blocked the interception step.
+4. **Say explicitly what would fix it**: "On a Wi-Fi network without client isolation — most home/office routers, unlike some phone hotspots — this same attack would succeed; I can show you the exact commands are already running and correctly targeting both machines."
 
 ## How to demo it live — run of show
 
 Do these in order, narrating each step out loud (the brief says you'll be questioned throughout, not after):
 
 1. **Show the architecture slide first** — point out the three machines and name the Mac as the malicious component, before touching a keyboard.
-2. **Open three terminal/browser windows side by side** if possible: client VM (browser + terminal), server VM (terminal, showing its access log live), Mac (two arpspoof terminals + Wireshark).
-3. **Show the "before" state**: `arp -a` on the client VM, pointing at the real server MAC address. Say what a MAC address is and why ARP exists (IP → MAC resolution).
+2. **Open terminal/browser windows side by side** if possible: client VM (browser + terminal), server VM (terminal, showing its access log live), Mac (bettercap + Wireshark).
+3. **Show the "before" state**: `ip neigh show <server-ip>` on the client VM, pointing at the real server MAC address. Say what a MAC address is and why ARP exists (IP → MAC resolution).
 4. **Start Wireshark capturing**, no filter yet — say you're watching all traffic, including the ARP layer.
-5. **Launch both `arpspoof` commands**, explain each flag out loud as you type it (`-i` interface, `-t` the victim being lied to, the IP being impersonated).
-6. **Re-run `arp -a` on the client VM** — show the MAC address has changed to the Mac's. This is your strongest "I understand what's happening at L2" moment.
-7. **Filter Wireshark on `arp`** briefly — show the forged replies going out continuously from the Mac's MAC, claiming to be both victim IPs.
-8. **Switch to the client VM's browser**, submit a real login.
-9. **Back in Wireshark**, filter `http.request.method == "POST" && http.request.uri == "/api/login"`, open the one matching packet, walk through its fields out loud: request line, `Host`, `Content-Type`, the JSON body.
+5. **Launch `bettercap`**, type the two commands, explain each out loud (`arp.spoof.targets` = the two victims, `arp.spoof on` = start forging replies).
+6. **Re-run `ip neigh show <server-ip>` on the client VM** — this is the moment of truth. If it changed, that's your strongest "I understand L2" proof point; if not, move calmly into the "If the spoof doesn't land" script above — you already know exactly what to say.
+7. **Filter Wireshark on `arp`** briefly either way — show the forged replies going out continuously from the Mac's MAC.
+8. **Submit a real login** from the client VM's browser.
+9. **Filter on the POST**, open the packet, walk through its fields out loud: request line, `Host`, `Content-Type`, the JSON body.
 10. **Follow → TCP Stream** — point at the plaintext email and password.
-11. **Switch to the server VM's terminal**, show its access log line for this same request — point out the source IP is still the *real* client's IP, because ARP spoofing only rewrites MAC addresses, not IP addresses, so the server has no way to detect the interception at this layer. This is a strong answer if asked "how would the server know?"
+11. **If interception succeeded**, switch to the server VM's terminal and show its access log still shows the *real* client IP — ARP spoofing only rewrites MAC addresses, not IP addresses, so the server can't detect it at this layer. Good answer if asked "how would the server know?"
 12. **Close with the "why this matters" line**: Study Bridge runs on plain HTTP on purpose — TLS is specifically what defeats this attack, because the attacker would only see ciphertext even after successfully rerouting the traffic.
-13. **Clean up live** (Ctrl+C both arpspoof terminals, disable IP forwarding) before moving to the conclusion slide.
+13. **Clean up live** (`arp.spoof off`, `quit`, disable IP forwarding) before moving to the conclusion slide.
 
 ## What to show the jury
 
@@ -126,16 +148,17 @@ Tie it to the grading rubric:
 | --- | --- | --- |
 | Pass | Infra + server running, 5 HTTP status codes demonstrated | Done (Step 0-9) |
 | Good | Demo on 3 physical machines over a mobile hotspot | Live: 2 bridged VMs + the Mac, different roles logged in simultaneously |
-| Prestigious | MITM demo showing plaintext HTTP credentials | Live: ARP-spoofed interception + Follow TCP Stream on the `/api/login` capture |
+| Prestigious | MITM demo showing plaintext HTTP credentials | Live attempt: ARP-spoofed interception if the network allows it, plus Follow TCP Stream on the `/api/login` capture either way |
 
 Say explicitly why this works: Study Bridge is deliberately plain HTTP, never HTTPS, so the capture directly demonstrates why authentication needs TLS in production — it's the point of the demo, not a workaround.
 
 ## Troubleshooting
 
 - **No HTTP packets in the capture:** confirm Wireshark was started *before* the login form was submitted, and that the browser didn't silently upgrade to `https://` (check the address bar).
-- **`arp -a` never changes / arpspoof has no visible effect:** the access point likely has **client/AP isolation** enabled, which blocks direct device-to-device traffic (including ARP) even though each device can still reach the internet individually. This is common on some phone personal hotspots. Test well before the real presentation; if it's blocked, you'll need a hotspot/router without isolation enabled — a plain home router rarely has this on.
+- **`ip neigh` never changes / spoof has no visible effect:** the access point likely has **client/AP isolation** enabled — see "If the spoof doesn't land" above. This is a network property, not a command mistake.
+- **`bettercap` syntax error on `arp.spoof.targets`:** don't type literal `<` `>` brackets — just the real IPs, comma-separated, no spaces: `set arp.spoof.targets 172.20.10.6,172.20.10.4`.
 - **Client can't reach the server at all:** re-check both VMs are actually on the hotspot (not still on old Wi-Fi/campus network), and that each VM's adapter is genuinely Bridged, not NAT — `ip addr` should show the hotspot subnet.
 - **`curl: Connection refused`:** the server isn't bound to `0.0.0.0` — confirm it was started with `HOST=0.0.0.0`, not left at the default `127.0.0.1`.
 - **`/health` returns `"database": "down"`:** the `data/` folder wasn't seeded, or the db file got renamed/moved — rerun `python3 -m studybridge.seed`.
-- **`arpspoof: command not found`:** `brew install dsniff` wasn't run, or `/opt/homebrew/bin` (or `/usr/local/bin`) isn't on `PATH`.
-- **Connectivity drops entirely once arpspoof starts:** IP forwarding wasn't actually enabled — re-run `sudo sysctl -w net.inet.ip.forwarding=1` and confirm with `sysctl net.inet.ip.forwarding`.
+- **`arp: command not found` on the VM:** `sudo apt install net-tools`, or just use `ip neigh` instead (no install needed).
+- **`sudo bettercap` asks for a password and nothing happens:** that's normal — type your Mac's own login password (it won't show characters as you type), then Enter.
